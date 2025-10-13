@@ -30,4 +30,15 @@ ypoints = np.array([3, 10])
 plt.plot(xpoints, ypoints)
 ```
 
-In addition you can add the comment `# mkdocs: hidecode` to hide  the code and and `# mkdocs: hideoutput` to hide the output image of the cell.
+The special comment directives (`# mkdocs: render`, `# mkdocs: hidecode`, `# mkdocs: hideoutput`) are automatically hidden from the rendered code output.
+
+In addition you can add `# mkdocs: hidecode` to hide the code and `# mkdocs: hideoutput` to hide the output image of the cell.
+
+```python
+# mkdocs: render
+# mkdocs: hidecode
+import matplotlib.pyplot as plt
+plt.plot([1, 2, 3], [4, 5, 6])
+```
+
+The above code block will only show the rendered figure, not the code.

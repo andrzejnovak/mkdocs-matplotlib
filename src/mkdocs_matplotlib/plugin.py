@@ -1,4 +1,5 @@
 import base64
+import re
 import tempfile
 from textwrap import dedent
 from typing import Any, Dict, Optional
@@ -69,6 +70,7 @@ class RenderPlugin(BasePlugin):
 
         Search for code cells in the passed HTML string. If there is a code cell and it starts
         with the correct comment, execute it and paste the rendered image in an img tag.
+        The special mkdocs comments are stripped from the displayed code.
 
         Args:
             html: Input Html
@@ -81,6 +83,7 @@ class RenderPlugin(BasePlugin):
         """
         soup = BeautifulSoup(html, features="html.parser")
 
+        tags_to_strip = []
         for code_tag in soup.find_all("code"):
             raw_code: str = code_tag.text
             code_lines = raw_code.splitlines()
@@ -88,19 +91,19 @@ class RenderPlugin(BasePlugin):
             is_hidecode = HIDECODE_SWITCH in code_lines
             is_hideoutput = HIDEOUTPUT_SWITCH in code_lines
 
-            temp_file = tempfile.NamedTemporaryFile(suffix=".png").name
-
             # skip if not a multi line code cell
             if code_tag.parent.name != "pre":
                 continue
 
             # only render if cell start with correct comment
             if is_render:
+                temp_file = tempfile.NamedTemporaryFile(suffix=".png").name
+
                 # Use fresh namespaces for each code block to prevent style bleeding
                 fresh_global_namespace: Dict[str, Any] = {}
                 fresh_local_namespace: Dict[str, Any] = {}
                 is_empty = _rendered_image_to_dir(
-                    temp_file, code_tag.text, fresh_global_namespace, fresh_local_namespace
+                    temp_file, raw_code, fresh_global_namespace, fresh_local_namespace
                 )
 
                 # get parent tag
@@ -119,5 +122,22 @@ class RenderPlugin(BasePlugin):
 
                 if is_hidecode:
                     parent_code_tag.decompose()
+                else:
+                    tags_to_strip.append(code_tag)
+                    print(f"Added code_tag to strip, raw_code: {repr(raw_code[:100])}")
 
-        return str(soup)
+        # Strip switches from code blocks that were rendered
+        for code_tag in tags_to_strip:
+            import re
+            for span in code_tag.find_all('span', class_=re.compile(r'^c')):
+                if span.get_text().strip() in [RENDER_SWITCH, HIDECODE_SWITCH, HIDEOUTPUT_SWITCH]:
+                    span.decompose()
+            # Remove empty first line span (from switch removal)
+            first_span = code_tag.find('span', id=re.compile(r'__span.*-1$'))
+            if first_span and first_span.get_text().strip() == '' and all(c.name == 'a' or (isinstance(c, str) and not c.strip()) for c in first_span.contents):
+                first_span.extract()
+
+        # Convert back to HTML string
+        result_html = str(soup)
+
+        return result_html
