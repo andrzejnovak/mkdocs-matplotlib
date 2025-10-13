@@ -3,8 +3,12 @@ site_description: "Test Site for Testing"
 use_directory_urls: false
 
 plugins:
-  - mkdocs_matplotlib
+  - mkdocs_matplotlib:
+      align: center
+      image_width: 100%
 
 nav:
   - index.md
   - text/text.md
+  - alignment.md
+  - test_highlight.md

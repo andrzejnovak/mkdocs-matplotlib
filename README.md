@@ -42,4 +42,53 @@ ypoints = np.array([3, 10])
 plt.plot(xpoints, ypoints)
 ```
 
-The special comment directives are automatically hidden from the rendered code. In addition you can add the comment `# mkdocs: hidecode` to hide the code and `# mkdocs: hideoutput` to hide the output image of the cell.
+You can add the comment `# mkdocs: hidecode` to hide the code and `# mkdocs: hideoutput` to hide the output image of the cell. The special comment directives appear as regular Python comments in the rendered code blocks.
+
+## Configuration
+
+You can customize the plugin behavior by adding configuration options to your `mkdocs.yml`:
+
+```yaml
+plugins:
+  - mkdocs_matplotlib:
+      align: center       # Options: left, center, right (default: center)
+      image_width: 100%   # Default width for rendered images (default: 100%)
+```
+
+### Image Alignment
+
+Control the horizontal alignment of rendered plots:
+
+- **Global configuration**: Set the default alignment for all plots in `mkdocs.yml`
+- **Per-plot override**: Use `# mkdocs: align=left`, `# mkdocs: align=center`, or `# mkdocs: align=right` in individual code blocks
+
+Example with left alignment:
+
+```python
+# mkdocs: render
+# mkdocs: align=left
+import matplotlib.pyplot as plt
+
+plt.plot([1, 2, 3], [1, 4, 9])
+plt.title('Left-aligned plot')
+```
+
+### Image Width
+
+Control the size of rendered plots:
+
+- **Global configuration**: Set the default width for all plots in `mkdocs.yml` (can be a percentage like `50%` or a fixed value like `400px`)
+- **Per-plot override**: Use `# mkdocs: width=<value>` in individual code blocks
+
+Example with 50% width:
+
+```python
+# mkdocs: render
+# mkdocs: width=50%
+import matplotlib.pyplot as plt
+
+plt.plot([1, 2, 3], [1, 4, 9])
+plt.title('Half-width plot')
+```
+
+All images include `max-width: 100%` and `height: auto` to ensure they remain responsive and maintain their aspect ratio.
