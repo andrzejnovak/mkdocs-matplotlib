@@ -22,16 +22,18 @@ def _rendered_image_to_dir(
 ) -> bool:
     # snippet to save a figure
     clearplot_code = """
+    import matplotlib
+    matplotlib.use('Agg')  # Set backend within execution context
     import matplotlib.pyplot as plt
+    plt.rcdefaults()  # Reset to matplotlib defaults before each execution
     """
     clearplot_code = dedent(clearplot_code)
 
     savefig_code = f"""
-    plt.savefig("{save_img_dir}", bbox_inches='tight')
+    plt.savefig("{save_img_dir}", format='png', dpi=100, bbox_inches='tight')
     """
     savefig_code = dedent(savefig_code)
     closefig_code = "plt.close()"
-
     # create namespace if not passed
     global_namespace = {} if global_namespace is None else global_namespace
     local_namespace = {} if local_namespace is None else local_namespace
@@ -79,10 +81,6 @@ class RenderPlugin(BasePlugin):
         """
         soup = BeautifulSoup(html, features="html.parser")
 
-        # create namespace
-        global_namespace: Dict[str, Any] = {}
-        local_namespace: Dict[str, Any] = {}
-
         for code_tag in soup.find_all("code"):
             raw_code: str = code_tag.text
             code_lines = raw_code.splitlines()
@@ -90,7 +88,7 @@ class RenderPlugin(BasePlugin):
             is_hidecode = HIDECODE_SWITCH in code_lines
             is_hideoutput = HIDEOUTPUT_SWITCH in code_lines
 
-            temp_file = tempfile.NamedTemporaryFile(suffix=".svg").name
+            temp_file = tempfile.NamedTemporaryFile(suffix=".png").name
 
             # skip if not a multi line code cell
             if code_tag.parent.name != "pre":
@@ -98,8 +96,11 @@ class RenderPlugin(BasePlugin):
 
             # only render if cell start with correct comment
             if is_render:
+                # Use fresh namespaces for each code block to prevent style bleeding
+                fresh_global_namespace: Dict[str, Any] = {}
+                fresh_local_namespace: Dict[str, Any] = {}
                 is_empty = _rendered_image_to_dir(
-                    temp_file, code_tag.text, global_namespace, local_namespace
+                    temp_file, code_tag.text, fresh_global_namespace, fresh_local_namespace
                 )
 
                 # get parent tag
@@ -111,7 +112,7 @@ class RenderPlugin(BasePlugin):
                         encoded = base64.b64encode(f.read()).decode("ascii")
                         img_tag = soup.new_tag(
                             "img",
-                            src="data:image/svg+xml;base64," + str(encoded),
+                            src="data:image/png;base64," + str(encoded),
                         )
                         parent_code_tag.insert_after(img_tag)
                         img_tag.wrap(soup.new_tag("center"))
