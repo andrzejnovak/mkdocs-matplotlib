@@ -16,6 +16,7 @@ HIDECODE_SWITCH = "# mkdocs: hidecode"
 HIDEOUTPUT_SWITCH = "# mkdocs: hideoutput"
 ALIGN_PATTERN = re.compile(r'# mkdocs: align=(left|center|right)', re.IGNORECASE)
 WIDTH_PATTERN = re.compile(r'# mkdocs: width=(.+)', re.IGNORECASE)
+HIDE_LINE_PATTERN = re.compile(r'# (markdown-exec|mkdocs): hide')
 
 
 def _rendered_image_to_dir(
@@ -192,8 +193,18 @@ class RenderPlugin(BasePlugin):
                     # Split into lines (preserving HTML tags)
                     lines = inner_html.split('\n')
 
-                    # Remove first N lines
-                    cleaned_lines = lines[directives_count:]
+                    # Filter out directive and hidden lines
+                    cleaned_lines = []
+                    for line in lines:
+                        line_stripped = line.strip()
+                        if (RENDER_SWITCH in line_stripped or
+                            HIDECODE_SWITCH in line_stripped or
+                            HIDEOUTPUT_SWITCH in line_stripped or
+                            ALIGN_PATTERN.search(line_stripped) or
+                            WIDTH_PATTERN.search(line_stripped) or
+                            HIDE_LINE_PATTERN.search(line)):
+                            continue  # skip this line
+                        cleaned_lines.append(line)
 
                     # Remove leading empty lines
                     while cleaned_lines and not cleaned_lines[0].strip():
