@@ -1,4 +1,6 @@
-import base64
+import hashlib
+import os
+import posixpath
 import re
 import tempfile
 from textwrap import dedent
@@ -24,6 +26,7 @@ def _rendered_image_to_dir(
     render_code: str,
     global_namespace: Optional[Dict[str, Any]] = None,
     local_namespace: Optional[Dict[str, Any]] = None,
+    dpi: int = 150,
 ) -> bool:
     # snippet to save a figure
     clearplot_code = """
@@ -35,13 +38,16 @@ def _rendered_image_to_dir(
     clearplot_code = dedent(clearplot_code)
 
     savefig_code = f"""
-    plt.savefig("{save_img_dir}", format='png', dpi=300, bbox_inches='tight', pad_inches=0.2)
+    plt.savefig(__mkdocs_mpl_savepath__, format='png', dpi={dpi}, bbox_inches='tight', pad_inches=0.2)
     """
     savefig_code = dedent(savefig_code)
     closefig_code = "plt.close()"
     # create namespace if not passed
     global_namespace = {} if global_namespace is None else global_namespace
     local_namespace = {} if local_namespace is None else local_namespace
+    # pass the save path via the namespace so arbitrary paths (spaces,
+    # Windows separators) survive the exec'd snippet
+    local_namespace["__mkdocs_mpl_savepath__"] = save_img_dir
 
     # render image to
     exec(clearplot_code, global_namespace, local_namespace)
@@ -70,7 +76,25 @@ class RenderPlugin(BasePlugin):
     config_scheme = (
         ('align', config_options.Choice(['left', 'center', 'right'], default='center')),
         ('image_width', config_options.Type(str, default='100%')),
+        ('dpi', config_options.Type(int, default=150)),
+        ('image_dir', config_options.Type(str, default='_images/mpl')),
     )
+
+    def _write_site_image(self, data: bytes, config: Config) -> str:
+        """Store image bytes under site_dir and return its site-root-relative path.
+
+        The filename is a content hash, so an identical figure is written (and
+        later committed to gh-pages) exactly once, no matter how many pages or
+        deploys produce it.
+        """
+        digest = hashlib.sha256(data).hexdigest()[:16]
+        rel_path = posixpath.join(self.config['image_dir'], f"{digest}.png")
+        dest = os.path.join(config['site_dir'], *rel_path.split('/'))
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        if not os.path.exists(dest):
+            with open(dest, "wb") as f:
+                f.write(data)
+        return rel_path
 
     def on_page_content(
         self, html: str, page: Page, config: Config, files: Files
@@ -125,25 +149,36 @@ class RenderPlugin(BasePlugin):
 
             # only render if cell start with correct comment
             if is_render:
-                temp_file = tempfile.NamedTemporaryFile(suffix=".png").name
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    temp_file = os.path.join(tmpdir, "figure.png")
 
-                # Use fresh namespaces for each code block to prevent style bleeding
-                fresh_global_namespace: Dict[str, Any] = {}
-                fresh_local_namespace: Dict[str, Any] = {}
-                is_empty = _rendered_image_to_dir(
-                    temp_file, raw_code, fresh_global_namespace, fresh_local_namespace
-                )
+                    # Use fresh namespaces for each code block to prevent style bleeding
+                    fresh_global_namespace: Dict[str, Any] = {}
+                    fresh_local_namespace: Dict[str, Any] = {}
+                    is_empty = _rendered_image_to_dir(
+                        temp_file,
+                        raw_code,
+                        fresh_global_namespace,
+                        fresh_local_namespace,
+                        dpi=self.config['dpi'],
+                    )
 
-                # get parent tag
-                parent_code_tag = code_tag.parent
+                    # get parent tag
+                    parent_code_tag = code_tag.parent
 
-                # insert image tag
-                if not is_hideoutput and not is_empty:
-                    with open(temp_file, "rb") as f:
-                        encoded = base64.b64encode(f.read()).decode("ascii")
+                    # insert image tag
+                    if not is_hideoutput and not is_empty:
+                        with open(temp_file, "rb") as f:
+                            data = f.read()
+                        rel_path = self._write_site_image(data, config)
+                        # link relative to the page so the site works from any
+                        # mount point (e.g. project pages, mike version dirs)
+                        src = posixpath.relpath(
+                            rel_path, posixpath.dirname(page.url)
+                        )
                         img_tag = soup.new_tag(
                             "img",
-                            src="data:image/png;base64," + str(encoded),
+                            src=src,
                             style=f"width: {image_width}; max-width: 100%; height: auto;"
                         )
                         parent_code_tag.insert_after(img_tag)

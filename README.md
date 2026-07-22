@@ -53,7 +53,16 @@ plugins:
   - mkdocs_matplotlib:
       align: center       # Options: left, center, right (default: center)
       image_width: 100%   # Default width for rendered images (default: 100%)
+      dpi: 150            # Resolution of rendered images (default: 150)
+      image_dir: _images/mpl  # Site-relative directory for rendered images (default: _images/mpl)
 ```
+
+Rendered figures are written into the built site as separate PNG files named
+by content hash (e.g. `_images/mpl/8ef646d9fdfede5a.png`) and referenced with
+relative `<img>` links, rather than being embedded into the page as base64
+data URIs. Identical figures are stored once, pages stay small, and rebuilds
+produce byte-identical files for unchanged figures — which keeps diffs and
+git-based deployments (e.g. `mike`/`gh-pages`) from ballooning.
 
 ### Image Alignment
 
